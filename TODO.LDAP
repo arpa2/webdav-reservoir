@@ -1,0 +1,9 @@
+
+ * Add reservoir attribute type
+ * Add reservoirNode object class
+ * Add lockedBy attribute type
+ * Add lockableObject object class
+
+Some time later, we shall add remote references too.
+Having an sftp:// URI scheme will be important for that.
+

@@ -1,0 +1,208 @@
+#!/usr/bin/env python
+#
+# a2reservoir commandline, see CMDLINE.MD for details.
+#
+# This is a commandline interface to the LDAP and Riak KV
+# combined backend for ARPA2 Reservoir.  This is an
+# operator's friend, bypassing ARPA2 ACLs as will be
+# enforced on services accessing this data.
+#
+# From: Rick van Rein <rick@openfortress.nl>
+
+
+import os
+import sys
+import uuid
+
+import ldap
+import riak
+from ldap import MOD_ADD, MOD_DELETE, MOD_REPLACE, MOD_INCREMENT
+from ldap import SCOPE_BASE, SCOPE_ONELEVEL, SCOPE_SUBTREE
+from ldap import NO_SUCH_OBJECT, ALREADY_EXISTS, NOT_ALLOWED_ON_NONLEAF
+
+#TODO# FIXED SECRETS ARE DEV-EASY BUT PRETTY BAD SECURITY STYLE :-)
+from user_pasw import user, pasw
+
+# As assigned a fixed value on http://uuid.arpa2.net
+reservoir_uuid = '904dfdb5-6b34-3818-b580-b9a0b4f7e7a9'
+
+domain  = os.environ.get ('ARPA2_DOMAIN', None)
+ldapuri = os.environ.get ('ARPA2_LDAPURI', None)
+
+if domain is None:
+	sys.stderr.write ('Please configure ARPA2_DOMAIN=example.com\n')
+	sys.exit (1)
+
+if ldapuri is None:
+	sys.stderr.write ('Please configure ARPA2_LDAPURI=ldap://localhost:389\n')
+	sys.exit (1)
+
+if len (sys.argv) < 3:
+	sys.stderr.write ('Usage: ' + sys.argv [0] + ' thingy add|del|... [args...]\n')
+	sys.exit (1)
+
+
+rkv = riak.RiakClient ()
+
+dap = ldap.initialize (ldapuri)
+dap.bind_s (user, pasw)
+
+base = 'ou=Reservoir,o=arpa2.org,ou=ServiceDIT'
+
+# Produce a UUID in the format we like it (lowercase string).
+#
+def random_uuid ():
+	return str (uuid.uuid4 ()).lower ()
+
+# Add a domain to LDAP; Riak KV treats this level as implicitly created
+#
+def cmd_domain_add (domain, orgname=None):
+	dn1 = 'associatedDomain=' + domain + ',' + base
+	at1 = [
+		('objectClass', ['organization','domainRelatedObject']),
+		('o', orgname or domain),
+		('associatedDomain', domain),
+	]
+	try:
+		meta = dap.add_s (dn1,at1)
+	except ALREADY_EXISTS:
+		print 'Domain already exists.'
+		return
+	dn2 = 'ou=Reservoir,' + dn1
+	at2 = [
+		('objectClass', ['organizationalUnit', 'resourceClass']),
+		('ou', 'Reservoir'),
+		('resourceClassUUID', reservoir_uuid),
+	]
+	try:
+		print 'adding', dn2
+		meta = dap.add_s (dn2,at2)
+	except Exception, e:
+		print 'exception, deleting', dn1
+		dap.delete_s (dn1)
+	#TODO# bucket-type management is the admin's prerogative, so here???
+	os.system ("riak-admin bucket-type create '" + domain + "' '{\"props\":{}}'")
+	os.system ("riak-admin bucket-type activate '" + domain + "'")
+
+# Delete a domain from LDAP; Riak KV treats this level as implicitly created
+#
+def cmd_domain_del (domain):
+	dn1 = 'associatedDomain=' + domain + ',' + base
+	dn2 = 'ou=Reservoir,' + dn1
+	try:
+		try:
+			print 'deleting', dn2
+			dap.delete_s (dn2)
+		except Exception, e:
+			print str (e)
+		try:
+			print 'deleting', dn1
+			dap.delete_s (dn1)
+		except NOT_ALLOWED_ON_NONLEAF:
+			print 'Remove other stuff first'
+	except NO_SUCH_OBJECT:
+		sys.stderr.write ('No such domain\n')
+
+
+# Add a new Resource Collection.
+# This adds a resourceInstanceKey RDN to LDAP and a bucket to Riak KV
+#
+def cmd_collection_add (domain, collname):
+	colluuid = random_uuid ()
+	dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	at1 = [
+		('objectClass', ['documentSeries','resourceInstance']),
+		('resourceClassUUID', reservoir_uuid),
+		('resourceInstanceKey', colluuid),
+		('cn', collname),
+	]
+	print 'adding', dn1
+	dap.add_s (dn1, at1)
+	#IMPLICIT NO DELETE???# rkv.bucket (colluuid, bucket_type=domain)
+	print 'Collection:', colluuid
+	return colluuid
+
+# Delete a Resource Collection.
+# This removes a recourceInstanceKey RDN from LDAP and the bucket in Riak KV
+#
+def cmd_collection_del (domain, colluuid):
+	#IMPLICIT DEL???# rkv.bucket (colluuid, bucket_type=domain)
+	dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	print 'deleting', dn1
+	dap.delete_s (dn1)
+
+# Get the ACL for a Resource Collection.
+# TODO: For now, trivially implemented as '@WRPKDV@'
+#
+def cmd_collection_get (domain, colluuid):
+	print 'AccessControl:', '@WRPKDV@', colluuid
+	return ('@RPKDV@', colluuid)
+
+#TODO# commands "link add", "link del"
+
+#TODO# commands "acl add", "acl del", "acl get"
+
+# Add an object to the given Resource Collection.
+# This sets up a descriptive object in LDAP and loads the object into Riak KV.
+#
+def cmd_object_add (domain, colluuid, mimetype, blob):
+	objkey = random_uuid ()
+	dn1 = 'documentIdentifier=' + objkey + ',resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	at1 = [
+		('objectClass', 'document'),
+		('documentIdentifier', objkey),
+		# mimetype ?
+	]
+	bkt = rkv.bucket_type (domain).bucket (colluuid)
+	obj = riak.RiakObject (rkv, bkt, objkey)
+	obj.content_type = mimetype
+	obj.data = blob
+	print 'Content-Type:', obj.content_type
+	print 'Data:', obj.data
+	obj.store ()
+	print 'adding', dn1
+	dap.add_s (dn1, at1)
+	print 'Resource:', objkey
+	return objkey
+
+# Get an object.
+# This finds the object in LDAP and subsequently downloads in from Riak KV.
+# Or... does it not even need to look into LDAP?
+#
+def cmd_object_get (domain, colluuid, objkey):
+	dn1 = 'documentIdentifier=' + objkey + ',resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	bkt = rkv.bucket_type (domain).bucket (colluuid)
+	obj = bkt.get (objkey)
+	print 'Content-Type:', obj.content_type
+	print 'Data:', obj.data
+
+# Remove an object.
+# This removes the data from Riak KV and the metadata from LDAP.
+#
+def cmd_object_del (domain, colluuid, objkey):
+	dn1 = 'documentIdentifier=' + objkey + ',resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	bkt = rkv.bucket_type (domain).bucket (colluuid)
+	bkt.delete (objkey)
+	print 'searching', dn1
+	dap.search_s (dn1, SCOPE_BASE)
+	print 'deleting', dn1
+	try:
+		dap.delete_s (dn1)
+	except NOT_ALLOWED_ON_NONLEAF:
+		print 'Remove other stuff first'
+
+# Main Program.  Not used when used in library mode.
+#
+if __name__ == '__main__':
+	domain = 'groengemak.nought'
+	cmd_domain_add (domain, 'GroenGemak')
+	pmcoll = cmd_collection_add (domain, 'Documentatiemap Permacultuur')
+	cmd_collection_get (domain, pmcoll)
+	hwkey = cmd_object_add (domain, pmcoll, 'text/plain', 'Hello World')
+	#DEBUG# import time
+	#DEBUG# time.sleep (30)
+	cmd_object_get (domain, pmcoll, hwkey)
+	cmd_object_del (domain, pmcoll, hwkey)
+	cmd_collection_del (domain, pmcoll)
+	cmd_domain_del (domain)
+
