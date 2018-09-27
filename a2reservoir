@@ -185,8 +185,10 @@ def cmd_collection_list (domain=None):
 # TODO: For now, trivially implemented as '@WRPKDV@'
 #
 def cmd_collection_get (domain, colluuid):
-	print 'AccessControl:', '@WRPKDV@', colluuid
-	return ('@RPKDV@', colluuid)
+	#TODO# Drop this command, it doubles acl get
+	print 'Collection:', colluuid
+	print 'AccessControl:', '666 RPKDV @.'
+	return [('666 RPKDV @.', colluuid)]
 
 #TODO# commands "link add", "link del"
 
@@ -236,7 +238,7 @@ def cmd_acl_list (domain=None, colluuid=None):
 			print 'Collection:', colluuid
 			for acls in fetch_acl_list (domain, colluuid):
 				for acl in acls:
-					print 'AccessControl: @' + acl + '@'
+					print 'AccessControl: ' + acl
 
 # Add an object to the given Resource Collection.
 # This sets up a descriptive object in LDAP and loads the object into Riak KV.

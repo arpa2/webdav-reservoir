@@ -18,11 +18,13 @@ setup.
 It is assumed below that the following
 environment variables have been set up:
 
-    ARPA2_DOMAIN=orvelte.nep
-    ARPA2_LDAPURI=ldap://localhost:389
-    ARPA2_RIAKURI=TODO
-    ARPA2_AUTHNID=bakker@orvelte.nep
-    ARPA2_AUTHZID=producent+bakker@orvelte.nep
+```shell
+ARPA2_DOMAIN=orvelte.nep
+ARPA2_LDAPURI=ldap://localhost:389
+ARPA2_RIAKURI=TODO
+ARPA2_AUTHNID=bakker@orvelte.nep
+ARPA2_AUTHZID=producent+bakker@orvelte.nep
+```
 
 These will be referenced as needed by
 the commandline tool `a2reservoir`.
@@ -32,17 +34,23 @@ the commandline tool `a2reservoir`.
 
 Run the following command:
 
-    shell$ a2reservoir domain add
-    Domain: orvelte.nep
+```shell
+shell$ a2reservoir domain add
+Domain: orvelte.nep
+```
 
 The opposite would be:
 
-    shell$ a2reservoir domain del
+```shell
+shell$ a2reservoir domain del
+```
 
 Between the last two operations it could be listed with:
 
-    shell$ a2reservoir domain list
-    Domain: orvelte.nep
+```shell
+shell$ a2reservoir domain list
+Domain: orvelte.nep
+```
 
 This `domain add` command introduces the
 domain `orvelte.nep`, found in environment
@@ -55,35 +63,45 @@ in Riak KV.
 
 Run the following command:
 
-    shell$ a2reservoir collection add Photos
-    Collection: 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
+```shell
+shell$ a2reservoir collection add Photos
+Collection: f2668fda-dc56-4c5f-9c70-d2ff23ca3323
+```
 
 The opposite would be:
 
-    shell$ a2reservoir collection del 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
+```shell
+shell$ a2reservoir collection del f2668fda-dc56-4c5f-9c70-d2ff23ca3323
+```
 
 Between these two calls it could be listed with:
 
-    shell$ a2reservoir collection list
+```shell
+shell$ a2reservoir collection list
+```
 
 While not yet deleted, one might query with:
 
-    shell$ a2reservoir collection get Photos
-    AccessControl: @V@ 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
+```shell
+shell$ a2reservoir collection get Photos
+AccessControl: 999 V @.
+```
 
 This `collection add` command creates an empty Resource Collection
 in LDAP, named
 
-    cn=Photos,ou=Reservoir,dc=orvelte,dc=nep
+```ldap
+resourceInstanceKey=f2668fda-dc56-4c5f-9c70-d2ff23ca3323,ou=Reservoir,associatedDomain=orvelte.nep,ou=Reservoir,o=internetwide.org,ou=ServiceDIT
+```
 
 This Resource Collection is now available under the
 domain `orvelte.nep` and it will be identified by
-the UUID `80f23a20-0f0c-4ca6-85ba-37f7f543e07b` that
+the UUID `f2668fda-dc56-4c5f-9c70-d2ff23ca3323` that
 was printed by the command.
 
 In Riak KV, the Resource Collection is mirrorred as a
 [bucket](http://docs.basho.com/riak/kv/2.2.3/using/reference/bucket-types/#buckets-as-namespaces),
-named `80f23a20-0f0c-4ca6-85ba-37f7f543e07b` (in lowercase) to be found underneath the
+named `f2668fda-dc56-4c5f-9c70-d2ff23ca3323` (in lowercase) to be found underneath the
 [bucket type](http://docs.basho.com/riak/kv/2.2.3/using/reference/bucket-types/)
 for this domain, `orvelte.nep`.
 
@@ -92,17 +110,23 @@ for this domain, `orvelte.nep`.
 
 Run the following command:
 
-    shell$ a2reservoir link add Photos/Holiday 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
-    Collection: 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
+```shell
+shell$ a2reservoir link add Photos/Holiday f2668fda-dc56-4c5f-9c70-d2ff23ca3323
+Collection: f2668fda-dc56-4c5f-9c70-d2ff23ca3323
+```
 
 The opposite would be:
 
-    shell$ a2reservoir link del Photos/Holiday
+```shell
+shell$ a2reservoir link del Photos/Holiday
+```
 
 While not yet unlinked, one might query with:
 
-    shell$ a2reservoir collection get Photos/Holiday
-    AccessControl: @V@ 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
+```shell
+shell$ a2reservoir collection get Photos/Holiday
+AccessControl: 999 V @.
+```
 
 This `link add` command creates a reference from the named UUID
 of a Resource Collection to the name `Holiday` in the `Photos`
@@ -116,21 +140,29 @@ one would use the UUID of something more sensible.
 
 Run the following command:
 
-    shell$ a2reservoir acl add @RPKOV@ bakker@orvelte.nep 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
+```shell
+shell$ a2reservoir acl add f2668fda-dc56-4c5f-9c70-d2ff23ca3323 '666 RPKOV bakker@orvelte.nep'
+```
 
 The opposite would be:
 
-    shell$ a2reservoir acl del @RPKOV@ bakker@orvelte.nep 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
+```shell
+shell$ a2reservoir acl del f2668fda-dc56-4c5f-9c70-d2ff23ca3323 '666 RPKOV bakker@orvelte.nep'
+```
 
 Between those commands, one might list the ACL and find this line:
 
-    shell$ a2reservoir acl list 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
-    ...
-    AccessControl: @RPKOV@ bakker@orvelte.nep
-    ...
+```shell
+shell$ a2reservoir acl list f2668fda-dc56-4c5f-9c70-d2ff23ca3323
+...
+AccessControl: @RPKOV@ bakker@orvelte.nep
+...
+```
 
-    shell$ a2reservoir acl get bakker@orvelte.nep 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
-    AccessControl: @RPKOV@
+```shell
+shell$ a2reservoir acl get bakker@orvelte.nep f2668fda-dc56-4c5f-9c70-d2ff23ca3323
+AccessControl: @RPKOV@
+```
 
 This command `acl add` creates a new ACL Rule on the ACL of the resource identified by
 the UUID.  We repeat that this is not evaluated at this point, but it is part of the
@@ -149,19 +181,25 @@ domain.
 
 Run the following command:
 
-    shell$ a2reservoir object add 80f23a20-0f0c-4ca6-85ba-37f7f543e07b Content-Type=image/jpeg < ~/photos/monkey.jpg
-    Resource: 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+```shell
+shell$ a2reservoir object add f2668fda-dc56-4c5f-9c70-d2ff23ca3323 Content-Type=image/jpeg < ~/photos/monkey.jpg
+Resource: 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+```
 
 The opposite would be:
 
-    shell$ a2reservoir object del 80f23a20-0f0c-4ca6-85ba-37f7f543e07b 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+```shell
+shell$ a2reservoir object del f2668fda-dc56-4c5f-9c70-d2ff23ca3323 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+```
 
 One might retrieve the object with:
 
-    shell$ a2reservoir object get 80f23a20-0f0c-4ca6-85ba-37f7f543e07b 2c23fb12-f87c-4dc3-b773-0a630f6223e7 > ~/photos/me.jpg
+```shell
+shell$ a2reservoir object get f2668fda-dc56-4c5f-9c70-d2ff23ca3323 2c23fb12-f87c-4dc3-b773-0a630f6223e7 > ~/photos/me.jpg
+```
 
 This command `object add` imports an object into ARPA2 Reservoir, as part of the Resource Collection
-80f23a20-0f0c-4ca6-85ba-37f7f543e07b.  The binary object is loaded from standard input, and the only
+f2668fda-dc56-4c5f-9c70-d2ff23ca3323.  The binary object is loaded from standard input, and the only
 required bit of metadata is supplied, namely the `Content-Type`, which may in some cases be inferred
 from the contents of the supplied data.
 
@@ -170,7 +208,9 @@ the key for the object.
 
 This command creates an object in LDAP at
 
-    resource=2c23fb12-f87c-4dc3-b773-0a630f6223e7,ou=80f23a20-0f0c-4ca6-85ba-37f7f543e07b,ou=Reservoir,dc=orvelte,dc=nep
+```ldap
+documentIdentifier=2c23fb12-f87c-4dc3-b773-0a630f6223e7,resourceInstanceKey=f2668fda-dc56-4c5f-9c70-d2ff23ca3323,ou=Reservoir,associatedDomain=orvelte.nep,ou=Reservoir,o=internetwide.org,ou=ServiceDIT
+```
 
 The attributes of this setting include the `Content-Type` setting to `image/jpeg` and the
 randomly generated `Resource`.  When the ACL is enforced, only users setup with `@C@`
@@ -180,15 +220,19 @@ with `@W@` rights could overwrite the previous value.
 In addition to this LDAP entry with metadata, the object itself gets stored in Riak KV
 at the following location:
 
-    /types/orvelte.nep/buckets/80f23a20-0f0c-4ca6-85ba-37f7f543e07b/keys/2c23fb12-f87c-4dc3-b773-0a630f6223e7
+```http
+/types/orvelte.nep/buckets/f2668fda-dc56-4c5f-9c70-d2ff23ca3323/keys/2c23fb12-f87c-4dc3-b773-0a630f6223e7
+```
 
 
 ## Adding and Removing Pipelines
 
 TODO:
 
-    shell$ a2reservoir pipeline add ...
-    shell$ a2reservoir pipeline del ...
+```shell
+shell$ a2reservoir pipeline add ...
+shell$ a2reservoir pipeline del ...
+```
 
 This command `pipeline add` introduces a resource that is not stored, but pipelined to a service
 over AMQP 1.0.
@@ -215,27 +259,35 @@ TODO:
 
 Run the following command:
 
-    shell$ a2reservoir meta add 2c23fb12-f87c-4dc3-b773-0a630f6223e7 Description='An ugly guy'
+```shell
+shell$ a2reservoir meta add 2c23fb12-f87c-4dc3-b773-0a630f6223e7 Description='An ugly guy'
+```
 
 The opposite would be:
 
-    shell$ a2reservoir meta del 2c23fb12-f87c-4dc3-b773-0a630f6223e7 Description='An ugly guy'
+```shell
+shell$ a2reservoir meta del 2c23fb12-f87c-4dc3-b773-0a630f6223e7 Description='An ugly guy'
+```
 
 To retrieve metadata, one might try:
 
-    shell$ a2reservoir meta get 2c23fb12-f87c-4dc3-b773-0a630f6223e7
-    Collection: 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
-    Resource: 2c23fb12-f87c-4dc3-b773-0a630f6223e7
-    Content-Type: image/jpeg
-    Description: An ugly guy
+```shell
+shell$ a2reservoir meta get 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+Collection: f2668fda-dc56-4c5f-9c70-d2ff23ca3323
+Resource: 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+Content-Type: image/jpeg
+Description: An ugly guy
+```
 
 To search based on metadata, one might try to look for images of ugly things:
 
-    shell$ a2reservoir meta search Content-Type='image/*' Description='*ugly*'
-    Collection: 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
-    Resource: 2c23fb12-f87c-4dc3-b773-0a630f6223e7
-    Content-Type: image/jpeg
-    Description: An ugly guy
+```shell
+shell$ a2reservoir meta search Content-Type='image/*' Description='*ugly*'
+Collection: f2668fda-dc56-4c5f-9c70-d2ff23ca3323
+Resource: 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+Content-Type: image/jpeg
+Description: An ugly guy
+```
 
 This command 'meta add' introduces a new attribute to describe the resource.
 If any attribute by the same name already exists, it will not be replaced.
@@ -249,11 +301,15 @@ LDAP searches, which is optimised for this type of query.
 
 Run the following command:
 
-    shell$ a2reservoir lock add 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+```shell
+shell$ a2reservoir lock add 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+```
 
 The opposite would be:
 
-    shell$ a2reservoir lock del 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+```shell
+shell$ a2reservoir lock del 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+```
 
 This command `lock add` can be used on Resources that have been setup with the
 `lockableObject` object class.  Locking is possible when the value of the
