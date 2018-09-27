@@ -39,6 +39,11 @@ The opposite would be:
 
     shell$ a2reservoir domain del
 
+Between the last two operations it could be listed with:
+
+    shell$ a2reservoir domain list
+    Domain: orvelte.nep
+
 This `domain add` command introduces the
 domain `orvelte.nep`, found in environment
 variable `ARPA2_DOMAIN`, as a
@@ -55,7 +60,11 @@ Run the following command:
 
 The opposite would be:
 
-    shell$ a2reservoir collection del Photos
+    shell$ a2reservoir collection del 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
+
+Between these two calls it could be listed with:
+
+    shell$ a2reservoir collection list
 
 While not yet deleted, one might query with:
 
@@ -115,7 +124,7 @@ The opposite would be:
 
 Between those commands, one might list the ACL and find this line:
 
-    shell$ a2reservoir acl get 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
+    shell$ a2reservoir acl list 80f23a20-0f0c-4ca6-85ba-37f7f543e07b
     ...
     AccessControl: @RPKOV@ bakker@orvelte.nep
     ...

@@ -75,7 +75,7 @@ def cmd_domain_add (domain, orgname=None):
 		('resourceClassUUID', reservoir_uuid),
 	]
 	try:
-		print 'adding', dn2
+		#DEBUG# print 'adding', dn2
 		meta = dap.add_s (dn2,at2)
 	except Exception, e:
 		print 'exception, deleting', dn1
@@ -91,32 +91,49 @@ def cmd_domain_del (domain):
 	dn2 = 'ou=Reservoir,' + dn1
 	try:
 		try:
-			print 'deleting', dn2
+			#DEBUG# print 'deleting', dn2
 			dap.delete_s (dn2)
 		except Exception, e:
-			print str (e)
+			print 'exception,', str (e)
 		try:
-			print 'deleting', dn1
+			#DEBUG# print 'deleting', dn1
 			dap.delete_s (dn1)
 		except NOT_ALLOWED_ON_NONLEAF:
 			print 'Remove other stuff first'
 	except NO_SUCH_OBJECT:
 		sys.stderr.write ('No such domain\n')
 
+# List domains in LDAP
+#
+def cmd_domain_list ():
+	dn1 = base
+	fl1 = '(objectClass=domainRelatedObject)'
+	al1 = ['associatedDomain']
+	#DEBUG# print 'searching', dn1, fl1, al1
+	qr1 = dap.search_s (dn1, SCOPE_ONELEVEL, filterstr=fl1, attrlist=al1)
+	#DEBUG# print 'Query response:', qr1
+	for (dn,at) in qr1:
+		# Note that we always set a single associatedDomain
+		# but domainRelatedObject does not set it as SINGULAR
+		[domain] = at.get ('associatedDomain', '(undefined)')
+		print 'Domain:', domain
+
 
 # Add a new Resource Collection.
-# This adds a resourceInstanceKey RDN to LDAP and a bucket to Riak KV
+# This adds a resourceInstanceKey RDN to LDAP and a bucket to Riak KV.
+# It sets up a default ACL granting no (or "Visitor") rights to anyone.
 #
 def cmd_collection_add (domain, collname):
 	colluuid = random_uuid ()
 	dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
 	at1 = [
-		('objectClass', ['documentSeries','resourceInstance']),
+		('objectClass', ['documentSeries','resourceInstance', 'accessControlledObject']),
 		('resourceClassUUID', reservoir_uuid),
 		('resourceInstanceKey', colluuid),
+		('accessControlList', '999 V @.'),
 		('cn', collname),
 	]
-	print 'adding', dn1
+	#DEBUG# print 'adding', dn1
 	dap.add_s (dn1, at1)
 	#IMPLICIT NO DELETE???# rkv.bucket (colluuid, bucket_type=domain)
 	print 'Collection:', colluuid
@@ -128,8 +145,23 @@ def cmd_collection_add (domain, collname):
 def cmd_collection_del (domain, colluuid):
 	#IMPLICIT DEL???# rkv.bucket (colluuid, bucket_type=domain)
 	dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
-	print 'deleting', dn1
+	#DEBUG# print 'deleting', dn1
 	dap.delete_s (dn1)
+
+# List the Resource Collections under a domain.
+#
+def cmd_collection_list (domain):
+	dn1 = 'ou=Reservoir,associatedDomain=' + domain + ',' + base
+	fl1 = '(&(objectClass=resourceInstance)(resourceClassUUID=904dfdb5-6b34-3818-b580-b9a0b4f7e7a9))'
+	al1 = ['resourceInstanceKey']
+	#DEBUG# print 'searching', dn1, fl1, al1
+	qr1 = dap.search_s (dn1, SCOPE_ONELEVEL, filterstr=fl1, attrlist=al1)
+	#DEBUG# print 'Query response:', qr1
+	for (dn,at) in qr1:
+		# Note that we always set a single resourceInstanceKey
+		# but domainRelatedObject does not set it as SINGULAR
+		[colluuid] = at.get ('resourceInstanceKey', '(undefined)')
+		print 'Collection:', colluuid
 
 # Get the ACL for a Resource Collection.
 # TODO: For now, trivially implemented as '@WRPKDV@'
@@ -140,7 +172,34 @@ def cmd_collection_get (domain, colluuid):
 
 #TODO# commands "link add", "link del"
 
-#TODO# commands "acl add", "acl del", "acl get"
+# Add an entry to the ACL for a Resource Collection.
+#
+def cmd_acl_add (domain, colluuid, acl):
+	dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	at1 = [ (MOD_ADD, 'accessControlList', acl) ]
+	#DEBUG# print 'adding', dn1
+	dap.modify_s (dn1, at1)
+
+# Delete an entry from the ACL for a Resource Collection.
+#
+def cmd_acl_del (domain, colluuid, acl):
+	dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	at1 = [ (MOD_DELETE, 'accessControlList', acl) ]
+	#DEBUG# print 'adding', dn1
+	dap.modify_s (dn1, at1)
+
+# Retrieve the ACL for a Resource Collection.
+#
+def cmd_acl_list (domain, colluuid):
+	dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	fl1 = '(&(objectClass=resourceInstance)(objectClass=accessControlledObject)(resourceClassUUID=' + reservoir_uuid + ')(resourceInstanceKey=' + colluuid + '))'
+	al1 = ['accessControlList']
+	print 'searching', dn1, fl1, al1
+	qr1 = dap.search_s (dn1, SCOPE_BASE, filterstr=fl1, attrlist=al1)
+	print 'Query response:', qr1
+	for (dn,at) in qr1:
+		for acl in at.get ('accessControlList', ['(undefined)']):
+			print 'AccessControl: @' + acl + '@'
 
 # Add an object to the given Resource Collection.
 # This sets up a descriptive object in LDAP and loads the object into Riak KV.
@@ -160,10 +219,25 @@ def cmd_object_add (domain, colluuid, mimetype, blob):
 	print 'Content-Type:', obj.content_type
 	print 'Data:', obj.data
 	obj.store ()
-	print 'adding', dn1
+	#DEBUG# print 'adding', dn1
 	dap.add_s (dn1, at1)
 	print 'Resource:', objkey
 	return objkey
+
+# Remove an object.
+# This removes the data from Riak KV and the metadata from LDAP.
+#
+def cmd_object_del (domain, colluuid, objkey):
+	dn1 = 'documentIdentifier=' + objkey + ',resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	bkt = rkv.bucket_type (domain).bucket (colluuid)
+	bkt.delete (objkey)
+	#DEBUG# print 'searching', dn1
+	dap.search_s (dn1, SCOPE_BASE)
+	#DEBUG# print 'deleting', dn1
+	try:
+		dap.delete_s (dn1)
+	except NOT_ALLOWED_ON_NONLEAF:
+		print 'Remove other stuff first'
 
 # Get an object.
 # This finds the object in LDAP and subsequently downloads in from Riak KV.
@@ -176,33 +250,39 @@ def cmd_object_get (domain, colluuid, objkey):
 	print 'Content-Type:', obj.content_type
 	print 'Data:', obj.data
 
-# Remove an object.
-# This removes the data from Riak KV and the metadata from LDAP.
-#
-def cmd_object_del (domain, colluuid, objkey):
-	dn1 = 'documentIdentifier=' + objkey + ',resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
-	bkt = rkv.bucket_type (domain).bucket (colluuid)
-	bkt.delete (objkey)
-	print 'searching', dn1
-	dap.search_s (dn1, SCOPE_BASE)
-	print 'deleting', dn1
-	try:
-		dap.delete_s (dn1)
-	except NOT_ALLOWED_ON_NONLEAF:
-		print 'Remove other stuff first'
 
 # Main Program.  Not used when used in library mode.
 #
 if __name__ == '__main__':
 	domain = 'groengemak.nought'
+	print 'DOMAIN ADD:'
 	cmd_domain_add (domain, 'GroenGemak')
+	print 'DOMAIN LIST:'
+	cmd_domain_list ()
+	print 'COLLECTION ADD:'
 	pmcoll = cmd_collection_add (domain, 'Documentatiemap Permacultuur')
-	cmd_collection_get (domain, pmcoll)
-	hwkey = cmd_object_add (domain, pmcoll, 'text/plain', 'Hello World')
-	#DEBUG# import time
-	#DEBUG# time.sleep (30)
-	cmd_object_get (domain, pmcoll, hwkey)
-	cmd_object_del (domain, pmcoll, hwkey)
+	print 'COLLECTION LIST:'
+	cmd_collection_list (domain)
+	print 'ACL ADD:'
+	cmd_acl_add (domain, pmcoll, '666 R @.')
+	print 'ACL LIST:'
+	cmd_acl_list (domain, pmcoll)
+	print 'ACL DEL:'
+	cmd_acl_del (domain, pmcoll, '666 R @.')
+	# print 'COLLECTION GET:'
+	# cmd_collection_get (domain, pmcoll)
+	# print 'OBJECT ADD:'
+	# hwkey = cmd_object_add (domain, pmcoll, 'text/plain', 'Hello World')
+	if True:
+		print 'SLEEP:'
+		import time
+		time.sleep (30)
+	# print 'OBJECT GET:'
+	# cmd_object_get (domain, pmcoll, hwkey)
+	# print 'OBJECT DEL:'
+	# cmd_object_del (domain, pmcoll, hwkey)
+	print 'COLLCTION DEL:'
 	cmd_collection_del (domain, pmcoll)
+	print 'DOMAIN DEL:'
 	cmd_domain_del (domain)
 
