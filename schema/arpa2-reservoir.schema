@@ -1,0 +1,86 @@
+# Definitions of OBJECT CLASS and ATTRIBUTE TYPE for Reservoir
+# in the InternetWide Architecture, or more specifically, the
+# identity hosting node who provides object storage service.
+#
+# Currently allocated as
+# ARPA2-Experimental-LDAP-SteamWorks-Reservoir
+# 1.3.6.1.4.1.44468.666.389.1.TODO:4
+#
+# We inherit some Attribute Types effectively renaming them:
+#
+# resourceClassUUID   -> reservoirBase
+# resourceInstanceKey -> resourceCollection
+#
+# We inherit some Object Classes, effectively renaming them:
+#
+# resourceClass    -> resourceBaseObject
+# resourceInstance -> resourceCollectionObject
+#
+# We do this for reasons of readability and proper matching, without
+# risking to loose the ACL search capabilities.  (TODO: WORTH IT?)
+#
+# We extend with a facility for references to Resource Collections.
+# These can be added anywhere, so they really do need new names.
+
+
+
+##
+## RESERVOIR REFERENCE ATTRIBUTES
+##
+
+# reservoir attributes are used to reference a Resource Collection
+# by UUID and, optionally, a space and human-friendly description.
+# The UUID is not usually shown to the user if it is not needed to
+# resolve ambiguity.  The form with just a UUID is never shown to
+# the user, but can be thought of as the default reference for the
+# LDAP object containing it.
+#
+# One object can hold as many reservoir attributes as it likes;
+# this can be used as a directory of named references to the
+# Resource Collections, with names assigned by the object owner.
+#
+# As a special note, a Resource Collection may also hold reservoir
+# attributes.  These help to define an apparent nesting between the
+# Resource Collections.  Lookup of entries in these attributes is
+# permitted by those with `@K@` access rights, or those who may
+# know that a Resource Collection exists (and in this case, the fact
+# that it references another Resource Collection).  It is possible
+# to pass through a Resource Collection without being able to read
+# it.
+#
+# The actual layout of the Resource Collections is flat, they are
+# all children of the same node and all Resources are direct children
+# of the Resource Collection that holds them.  Using the reservoir
+# references however, one may browse around.  Do note that there is
+# no constraint on how this is done.  There is no guarantee of
+# referential integratiy, not of subtrees never joining and nog even
+# on the avoidance of cycles.  What we do have is a unique, random
+# UUID for each Resource Collection, which serves well to detect any
+# cycles or rediscoveries of shared branches. Usually, tools should
+# not want to build such overviews though; the idea is that LDAP
+# already fulfils all the desired functions (of searching).
+#
+attributetype ( TODO
+	NAME 'reservoir'
+	DESC 'UUID for a Resource Collection, with optionally a space and human-friendly description'
+	SUP TODO )
+
+
+#TODO# remote resource collections
+
+#TODO# lockable objects -- through atomic updates
+
+#TODO# simpler "blob" objects for resources?
+# -  includes hashing options
+# -  includes IPFS references?
+# -  includes IPNS locations?
+# -  includes general URIs
+# -  includes short "blobKey"
+# -  includes version history / backrefs?
+# -  includes arbitrary kinds of documentation
+# -  includes Content-Type
+
+#TODO# object classes
+
+#TODO# simpler attr type names for res/rescol/doc?
+
