@@ -23,7 +23,7 @@ from ldap import NO_SUCH_OBJECT, ALREADY_EXISTS, NOT_ALLOWED_ON_NONLEAF
 #TODO# FIXED SECRETS ARE DEV-EASY BUT PRETTY BAD SECURITY STYLE :-)
 from user_pasw import user, pasw
 
-# As assigned a fixed value on http://uuid.arpa2.net
+# As assigned a fixed value on http://uuid.arpa2.org
 reservoir_uuid = '904dfdb5-6b34-3818-b580-b9a0b4f7e7a9'
 
 domain  = os.environ.get ('ARPA2_DOMAIN', None)
