@@ -68,18 +68,6 @@ def cmd_domain_add (domain, orgname=None):
 	except ALREADY_EXISTS:
 		print 'Domain already exists.'
 		return
-	dn2 = 'ou=Reservoir,' + dn1
-	at2 = [
-		('objectClass', ['organizationalUnit', 'resourceClass']),
-		('ou', 'Reservoir'),
-		('resourceClassUUID', reservoir_uuid),
-	]
-	try:
-		#DEBUG# print 'adding', dn2
-		meta = dap.add_s (dn2,at2)
-	except Exception, e:
-		print 'exception, deleting', dn1
-		dap.delete_s (dn1)
 	#TODO# bucket-type management is the admin's prerogative, so here???
 	os.system ("riak-admin bucket-type create '" + domain + "' '{\"props\":{}}'")
 	os.system ("riak-admin bucket-type activate '" + domain + "'")
@@ -89,18 +77,11 @@ def cmd_domain_add (domain, orgname=None):
 def cmd_domain_del (*domains):
 	for domain in domains:
 		dn1 = 'associatedDomain=' + domain + ',' + base
-		dn2 = 'ou=Reservoir,' + dn1
 		try:
-			try:
-				#DEBUG# print 'deleting', dn2
-				dap.delete_s (dn2)
-			except Exception, e:
-				print 'exception,', str (e)
-			try:
-				#DEBUG# print 'deleting', dn1
-				dap.delete_s (dn1)
-			except NOT_ALLOWED_ON_NONLEAF:
-				print 'Remove other stuff first'
+			#DEBUG# print 'deleting', dn1
+			dap.delete_s (dn1)
+		except NOT_ALLOWED_ON_NONLEAF:
+			print 'Remove other stuff first'
 		except NO_SUCH_OBJECT:
 			sys.stderr.write ('No such domain\n')
 
@@ -115,7 +96,7 @@ def fetch_domain_list ():
 		qr1 = dap.search_s (dn1, SCOPE_ONELEVEL, filterstr=fl1, attrlist=al1)
 		#DEBUG# print 'Query response:', qr1
 		# Note that we always set a single associatedDomain
-		# but domainRelatedObject does not set it as SINGULAR
+		# but domainRelatedObject does not set it as SINGLE-VALUE
 		return [ at.get ('associatedDomain', ['undefined']) [0] for (dn,at) in qr1 ]
 	except NO_SUCH_OBJECT:
 		return []
@@ -126,20 +107,21 @@ def cmd_domain_list ():
 
 
 # Add a new Resource Collection.
-# This adds a resourceInstanceKey RDN to LDAP and a bucket to Riak KV.
+# This adds a collection RDN to LDAP and a bucket to Riak KV.
 # It sets up a default ACL granting no (or "Visitor") rights to anyone.
 #
 def cmd_collection_add (domain, collname):
 	colluuid = random_uuid ()
-	dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	dn1 = 'collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
 	at1 = [
-		('objectClass', ['documentSeries','resourceInstance', 'accessControlledObject']),
+		('objectClass', ['reservoirCollection', 'resourceInstance', 'accessControlledObject','reservoirIndex']),
 		('resourceClassUUID', reservoir_uuid),
 		('resourceInstanceKey', colluuid),
+		('collection', colluuid),
 		('accessControlList', '999 V @.'),
 		('cn', collname),
 	]
-	#DEBUG# print 'adding', dn1
+	print 'adding', dn1
 	dap.add_s (dn1, at1)
 	#IMPLICIT NO DELETE???# rkv.bucket (colluuid, bucket_type=domain)
 	print 'Collection:', colluuid
@@ -151,7 +133,7 @@ def cmd_collection_add (domain, collname):
 def cmd_collection_del (domain, *colluuids):
 	for colluuid in colluuids:
 		#IMPLICIT DEL???# rkv.bucket (colluuid, bucket_type=domain)
-		dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+		dn1 = 'collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
 		#DEBUG# print 'deleting', dn1
 		dap.delete_s (dn1)
 
@@ -159,15 +141,15 @@ def cmd_collection_del (domain, *colluuids):
 #
 def fetch_collection_list (domain):
 	try:
-		dn1 = 'ou=Reservoir,associatedDomain=' + domain + ',' + base
-		fl1 = '(&(objectClass=resourceInstance)(resourceClassUUID=904dfdb5-6b34-3818-b580-b9a0b4f7e7a9))'
-		al1 = ['resourceInstanceKey']
+		dn1 = 'associatedDomain=' + domain + ',' + base
+		fl1 = '(&(objectClass=reservoirCollection)(resourceClassUUID=' + reservoir_uuid + '))'
+		al1 = ['collection']
 		#DEBUG# print 'searching', dn1, fl1, al1
 		qr1 = dap.search_s (dn1, SCOPE_ONELEVEL, filterstr=fl1, attrlist=al1)
 		#DEBUG# print 'Query response:', qr1
-		# Note that we always set a single resourceInstanceKey
-		# but domainRelatedObject does not set it as SINGULAR
-		return [ at.get ('resourceInstanceKey', ['(undefined)']) [0] for (dn,at) in qr1 ]
+		# Note that we always set a single collection
+		# but domainRelatedObject does not set it as SINGLE-VALUE
+		return [ at.get ('collection', ['(undefined)']) [0] for (dn,at) in qr1 ]
 	except NO_SUCH_OBJECT:
 		return []
 
@@ -181,21 +163,41 @@ def cmd_collection_list (domain=None):
 		for colluuid in fetch_collection_list (domain):
 			print 'Collection:', colluuid
 
-# Get the ACL for a Resource Collection.
-# TODO: For now, trivially implemented as '@WRPKDV@'
-#
-def cmd_collection_get (domain, colluuid):
-	#TODO# Drop this command, it doubles acl get
-	print 'Collection:', colluuid
-	print 'AccessControl:', '666 RPKDV @.'
-	return [('666 RPKDV @.', colluuid)]
+def cmd_index_add (domain, colluuid, refname, refcolluuid):
+	dn1 = 'collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
+	at1 = [ (MOD_ADD, 'collectionRef', refcolluuid + ' ' + refname) ]
+	dap.modify_s (dn1, at1)
 
-#TODO# commands "link add", "link del"
+def cmd_index_del (domain, colluuid, refname, refcolluuid):
+	dn1 = 'collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
+	at1 = [ (MOD_DELETE, 'collectionRef', refcolluuid + ' ' + refname) ]
+	dap.modify_s (dn1, at1)
+
+def fetch_index_list (dn1):
+	rv1 = { }
+	#DEBUG# print 'searching', dn1
+	qr1 = dap.search_s (dn1, SCOPE_BASE, attrlist=['collectionRef'])
+	#DEBUG# print 'Query result:', qr1
+	for (dn,at) in qr1:
+		for rr in at.get ('collectionRef', []):
+			try:
+				[v,k] = rr.split (' ', 1)
+				rv1 [k] = v
+			except:
+				rv1 [rr] = '(undefined)'
+	return rv1
+def cmd_index_list (domain, colluuid):
+	print 'Domain:', domain
+	print 'Collection:', colluuid
+	dn1 = 'collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
+	for (refname,uuid) in fetch_index_list (dn1).items ():
+		print 'Reference:', uuid, refname or ''
+
 
 # Add an entry to the ACL for a Resource Collection.
 #
 def cmd_acl_add (domain, colluuid, acl):
-	dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	dn1 = 'collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
 	at1 = [ (MOD_ADD, 'accessControlList', acl) ]
 	#DEBUG# print 'adding', dn1
 	dap.modify_s (dn1, at1)
@@ -204,7 +206,7 @@ def cmd_acl_add (domain, colluuid, acl):
 #
 def cmd_acl_del (domain, colluuid, *acls):
 	for acl in acls:
-		dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+		dn1 = 'collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
 		at1 = [ (MOD_DELETE, 'accessControlList', acl) ]
 		#DEBUG# print 'adding', dn1
 		dap.modify_s (dn1, at1)
@@ -213,8 +215,8 @@ def cmd_acl_del (domain, colluuid, *acls):
 #
 def fetch_acl_list (domain, colluuid):
 	try:
-		dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
-		fl1 = '(&(objectClass=resourceInstance)(objectClass=accessControlledObject)(resourceClassUUID=' + reservoir_uuid + ')(resourceInstanceKey=' + colluuid + '))'
+		dn1 = 'collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
+		fl1 = '(&(objectClass=resourceInstance)(objectClass=accessControlledObject)(resourceClassUUID=' + reservoir_uuid + ')(collection=' + colluuid + '))'
 		al1 = ['accessControlList']
 		#DEBUG# print 'searching', dn1, fl1, al1
 		qr1 = dap.search_s (dn1, SCOPE_BASE, filterstr=fl1, attrlist=al1)
@@ -243,12 +245,14 @@ def cmd_acl_list (domain=None, colluuid=None):
 # Add an object to the given Resource Collection.
 # This sets up a descriptive object in LDAP and loads the object into Riak KV.
 #
-def cmd_object_add (domain, colluuid, mimetype, blob):
+def cmd_resource_add (domain, colluuid, mediatype, objname, blob):
 	objkey = random_uuid ()
-	dn1 = 'documentIdentifier=' + objkey + ',resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+	dn1 = 'resource=' + objkey + ',collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
 	at1 = [
 		('objectClass', 'document'),
-		('documentIdentifier', objkey),
+		('resource', objkey),
+		('mediaType', mediatype),
+		('cn', objname),
 		# mimetype ?
 	]
 	bkt = rkv.bucket_type (domain).bucket (colluuid)
@@ -266,9 +270,9 @@ def cmd_object_add (domain, colluuid, mimetype, blob):
 # Remove an object.
 # This removes the data from Riak KV and the metadata from LDAP.
 #
-def cmd_object_del (domain, colluuid, *objkeys):
+def cmd_resource_del (domain, colluuid, *objkeys):
 	for objkey in objkeys:
-		dn1 = 'documentIdentifier=' + objkey + ',resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+		dn1 = 'resource=' + objkey + ',collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
 		bkt = rkv.bucket_type (domain).bucket (colluuid)
 		bkt.delete (objkey)
 		#DEBUG# print 'searching', dn1
@@ -281,17 +285,17 @@ def cmd_object_del (domain, colluuid, *objkeys):
 
 # List the objects in a Resource Collection.
 #
-def fetch_object_list (domain, colluuid):
-	dn1 = 'resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+def fetch_resource_list (domain, colluuid):
+	dn1 = 'collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
 	fl1 = '(objectClass=document)'
-	al1 = ['documentIdentifier']
+	al1 = ['resource']
 	#DEBUG# print 'searching', dn1, fl1, al1
 	qr1 = dap.search_s (dn1, SCOPE_ONELEVEL, filterstr=fl1, attrlist=al1)
 	#DEBUG# print 'Query response:', qr1
-	# Treat the documentIdentifier as SINGULAR
+	# Treat the resource as SINGLE-VALUE
 	# as this is how we use it
-	return [ at.get ('documentIdentifier', ['(undefined)']) [0] for (dn,at) in qr1 ]
-def cmd_object_list (domain=None, colluuid=None):
+	return [ at.get ('resource', ['(undefined)']) [0] for (dn,at) in qr1 ]
+def cmd_resource_list (domain=None, colluuid=None):
 	if domain is None:
 		domains = fetch_domain_list ()
 	else:
@@ -304,15 +308,15 @@ def cmd_object_list (domain=None, colluuid=None):
 			colluuids = [colluuid]
 		for colluuid in colluuids:
 			print 'Collection:', colluuid
-			for objkey in fetch_object_list (domain, colluuid):
+			for objkey in fetch_resource_list (domain, colluuid):
 				print 'Resource:', objkey
 
 # Get an object.
 # This finds the object in LDAP and subsequently downloads in from Riak KV.
 # Or... does it not even need to look into LDAP?
 #
-def cmd_object_get (domain, colluuid, objkey):
-	dn1 = 'documentIdentifier=' + objkey + ',resourceInstanceKey=' + colluuid + ',ou=Reservoir,associatedDomain=' + domain + ',' + base
+def cmd_resource_get (domain, colluuid, objkey):
+	dn1 = 'resource=' + objkey + ',collection=' + colluuid + ',associatedDomain=' + domain + ',' + base
 	bkt = rkv.bucket_type (domain).bucket (colluuid)
 	obj = bkt.get (objkey)
 	print 'Content-Type:', obj.content_type
@@ -328,14 +332,20 @@ cmd2info = {
 	('collection','add'):	(2,2,cmd_collection_add),
 	('collection','del'):	(2,None,cmd_collection_del),
 	('collection','list'):	(0,1,cmd_collection_list),
-	('collection','get'):	(2,2,cmd_collection_get),
 	('acl','add'):		(3,3,cmd_acl_add),
 	('acl','del'):		(3,None,cmd_acl_del),
 	('acl','list'):		(0,2,cmd_acl_list),
-	('object','add'):	(4,4,cmd_object_add),
-	('object','del'):	(3,None,cmd_object_del),
-	('object','list'):	(0,2,cmd_object_list),
-	('object','get'):	(3,3,cmd_object_get),
+	('index','add'):	(4,4,cmd_index_add),
+	('index','del'):	(4,4,cmd_index_del),
+	('index','list'):	(2,2,cmd_index_list),
+	('resource','add'):	(5,5,cmd_resource_add),
+	('resource','del'):	(3,None,cmd_resource_del),
+	('resource','list'):	(0,2,cmd_resource_list),
+	('resource','get'):	(3,3,cmd_resource_get),
+	('object','add'):	(5,5,cmd_resource_add),
+	('object','del'):	(3,None,cmd_resource_del),
+	('object','list'):	(0,2,cmd_resource_list),
+	('object','get'):	(3,3,cmd_resource_get),
 }
 
 # Run a single command.  Print an error if necessary.
@@ -369,7 +379,7 @@ def shell ():
 		if sys.stdin.isatty ():
 			sys.stdout.write ('a2reservoir> ')
 			sys.stdout.flush ()
-		words = sys.stdin.readline ().strip ().split (' ')
+		words = sys.stdin.readline ().replace ('\t',' ').replace ('  ',' ').strip ().split (' ')
 		if words in [['exit'], ['quit']]:
 			exited = True
 		elif words != []:
@@ -400,20 +410,20 @@ if __name__ == '__main__':
 # cmd_acl_list (domain, pmcoll)
 # print 'ACL DEL:'
 # cmd_acl_del (domain, pmcoll, '666 R @.')
-# print 'COLLECTION GET:'
-# cmd_collection_get (domain, pmcoll)
+# #DROPPED# print 'COLLECTION GET:'
+# #DROPPED# cmd_collection_get (domain, pmcoll)
 # print 'OBJECT ADD:'
-# hwkey = cmd_object_add (domain, pmcoll, 'text/plain', 'Hello World')
+# hwkey = cmd_resource_add (domain, pmcoll, 'text/plain', 'Hello World')
 # print 'OBJECT LIST:'
-# cmd_object_list (domain, pmcoll)
+# cmd_resource_list (domain, pmcoll)
 # print 'OBJECT GET:'
-# cmd_object_get (domain, pmcoll, hwkey)
+# cmd_resource_get (domain, pmcoll, hwkey)
 # if False:
 # 	print 'SLEEP:'
 # 	import time
 # 	time.sleep (30)
 # print 'OBJECT DEL:'
-# cmd_object_del (domain, pmcoll, hwkey)
+# cmd_resource_del (domain, pmcoll, hwkey)
 # print 'COLLCTION DEL:'
 # cmd_collection_del (domain, pmcoll)
 # print 'DOMAIN DEL:'

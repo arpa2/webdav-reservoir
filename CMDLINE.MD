@@ -111,24 +111,24 @@ for this domain, `orvelte.nep`.
 Run the following command:
 
 ```shell
-shell$ a2reservoir link add Photos/Holiday f2668fda-dc56-4c5f-9c70-d2ff23ca3323
-Collection: f2668fda-dc56-4c5f-9c70-d2ff23ca3323
+shell$ a2reservoir index add orvelte.nep f2668fda-dc56-4c5f-9c70-d2ff23ca3323Photos f2668fda-dc56-4c5f-9c70-d2ff23ca3323
+Collection: f2668fda-dc56-4c5f-9c70-d2ff23ca3323 Photos
 ```
 
 The opposite would be:
 
 ```shell
-shell$ a2reservoir link del Photos/Holiday
+shell$ a2reservoir index del orvelte.nep 5c4ff651-8b24-4dc3-9e06-7a5a3e0fe670 Photos 5c4ff651-8b24-4dc3-9e06-7a5a3e0fe670
 ```
 
-While not yet unlinked, one might query with:
+While not yet indexing items, one might query with:
 
 ```shell
-shell$ a2reservoir collection get Photos/Holiday
-AccessControl: 999 V @.
+shell$ a2reservoir index list orvelte.nep 5c4ff651-8b24-4dc3-9e06-7a5a3e0fe670
+Reference: 5c4ff651-8b24-4dc3-9e06-7a5a3e0fe670 Photos
 ```
 
-This `link add` command creates a reference from the named UUID
+This `index add` command creates a reference from the named UUID
 of a Resource Collection to the name `Holiday` in the `Photos`
 Resource Collection.  In this particular example that creates
 a cyclic reference, which is not problematic in itself because
@@ -155,7 +155,7 @@ Between those commands, one might list the ACL and find this line:
 ```shell
 shell$ a2reservoir acl list f2668fda-dc56-4c5f-9c70-d2ff23ca3323
 ...
-AccessControl: @RPKOV@ bakker@orvelte.nep
+AccessControl: 666 @RPKOV@ bakker@orvelte.nep
 ...
 ```
 
@@ -182,23 +182,23 @@ domain.
 Run the following command:
 
 ```shell
-shell$ a2reservoir object add f2668fda-dc56-4c5f-9c70-d2ff23ca3323 Content-Type=image/jpeg < ~/photos/monkey.jpg
+shell$ a2reservoir resource add f2668fda-dc56-4c5f-9c70-d2ff23ca3323 Content-Type=image/jpeg < ~/photos/monkey.jpg
 Resource: 2c23fb12-f87c-4dc3-b773-0a630f6223e7
 ```
 
 The opposite would be:
 
 ```shell
-shell$ a2reservoir object del f2668fda-dc56-4c5f-9c70-d2ff23ca3323 2c23fb12-f87c-4dc3-b773-0a630f6223e7
+shell$ a2reservoir resource del f2668fda-dc56-4c5f-9c70-d2ff23ca3323 2c23fb12-f87c-4dc3-b773-0a630f6223e7
 ```
 
-One might retrieve the object with:
+One might retrieve the resource with:
 
 ```shell
-shell$ a2reservoir object get f2668fda-dc56-4c5f-9c70-d2ff23ca3323 2c23fb12-f87c-4dc3-b773-0a630f6223e7 > ~/photos/me.jpg
+shell$ a2reservoir resource get f2668fda-dc56-4c5f-9c70-d2ff23ca3323 2c23fb12-f87c-4dc3-b773-0a630f6223e7 > ~/photos/me.jpg
 ```
 
-This command `object add` imports an object into ARPA2 Reservoir, as part of the Resource Collection
+This command `resource add` imports a resource into ARPA2 Reservoir, as part of the Resource Collection
 f2668fda-dc56-4c5f-9c70-d2ff23ca3323.  The binary object is loaded from standard input, and the only
 required bit of metadata is supplied, namely the `Content-Type`, which may in some cases be inferred
 from the contents of the supplied data.
@@ -206,7 +206,7 @@ from the contents of the supplied data.
 The output of the command, here `2c23fb12-f87c-4dc3-b773-0a630f6223e7`, is the UUID that serves as
 the key for the object.
 
-This command creates an object in LDAP at
+This command creates a resource in LDAP at
 
 ```ldap
 documentIdentifier=2c23fb12-f87c-4dc3-b773-0a630f6223e7,resourceInstanceKey=f2668fda-dc56-4c5f-9c70-d2ff23ca3323,ou=Reservoir,associatedDomain=orvelte.nep,ou=Reservoir,o=internetwide.org,ou=ServiceDIT

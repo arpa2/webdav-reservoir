@@ -171,8 +171,8 @@ objectclass ( 1.3.6.1.4.1.44469.666.389.2.2.1
 	NAME 'reservoirResource'
 	DESC 'One Resource as stored in the ARPA2 Reservoir.  This is the metadata part, the actual data is in an object store.'
 	STRUCTURAL SUP document
-	MUST ( documentIdentifier $ mediaType )
-	MAY ( description $ documentHash $ labeledURI $ lockedBy ) )
+	MUST ( resource )
+	MAY ( cn $ mediaType $ description $ documentHash $ labeledURI $ lockedBy ) )
 
 # The reservoirCollection is used to represent a Resource Collection.
 # Its identity is a UUID which should be used in the RDN, so as to
@@ -188,7 +188,7 @@ objectclass ( 1.3.6.1.4.1.44469.666.389.2.2.1
 objectclass ( 1.3.6.1.4.1.44469.666.389.2.2.2
 	NAME 'reservoirCollection'
 	DESC 'One Resource Collection as stored in the ARPA2 Reservoir.  Usually with a reservoirIndex attached to simulate trees of Resource Collections, with Resources at the leafs.'
-	STRUCTURAL
+	STRUCTURAL SUP documentSeries
 	MUST ( collection $ resourceClassUUID )
 	MAY ( cn $ description ) )
 
