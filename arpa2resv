@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# a2reservoir commandline, see CMDLINE.MD for details.
+# arpa2resv commandline, see CMDLINE.MD for details.
 #
 # This is a commandline interface to the LDAP and Riak KV
 # combined backend for ARPA2 Reservoir.  This is an
@@ -13,6 +13,7 @@
 import os
 import sys
 import uuid
+import re
 
 import ldap
 import riak
@@ -20,34 +21,66 @@ from ldap import MOD_ADD, MOD_DELETE, MOD_REPLACE, MOD_INCREMENT
 from ldap import SCOPE_BASE, SCOPE_ONELEVEL, SCOPE_SUBTREE
 from ldap import NO_SUCH_OBJECT, ALREADY_EXISTS, NOT_ALLOWED_ON_NONLEAF
 
-#TODO# FIXED SECRETS ARE DEV-EASY BUT PRETTY BAD SECURITY STYLE :-)
-from user_pasw import user, pasw
 
 # As assigned a fixed value on http://uuid.arpa2.org
 reservoir_uuid = '904dfdb5-6b34-3818-b580-b9a0b4f7e7a9'
 
-domain  = os.environ.get ('ARPA2_DOMAIN', None)
-ldapuri = os.environ.get ('ARPA2_LDAPURI', None)
-
-if domain is None:
-	sys.stderr.write ('Please configure ARPA2_DOMAIN=example.com\n')
-	sys.exit (1)
-
-if ldapuri is None:
-	sys.stderr.write ('Please configure ARPA2_LDAPURI=ldap://localhost:389\n')
-	sys.exit (1)
+#
+# Configuration
+#
 
 if len (sys.argv) == 2:
 	sys.stderr.write ('Usage: ' + sys.argv [0] + ' [thingy add|del|list|get|... [args...]]\n')
 	sys.exit (1)
 
+base = 'ou=Reservoir,o=arpa2.net,ou=InternetWide'
+
+cfgln_re = re.compile ('^([A-Z]+)[ \t]*(.*)$')
+ldapcfg = { }
+try:
+        for cfgln in open ('/etc/ldap/ldap.conf', 'r').readlines ():
+                m = cfgln_re.match (cfgln)
+                if m is not None:
+                        (key,val) = m.groups ()
+                        ldapcfg [key] = val
+except:
+        pass
+
+if ldapcfg.has_key ('URI'):
+	ldapuri = ldapcfg ['URI']
+else:
+	ldapuri = os.environ.get ('ARPA2_LDAPURI', None)
+if ldapuri is None:
+	sys.stderr.write ('Please set URI in /etc/ldap/ldap.conf or configure ARPA2_LDAPURI\n')
+	sys.exit (1)
+
+if ldapcfg.has_key ('BINDDN'):
+	ldapuser = ldapcfg ['BINDDN']
+	ldappasw = os.environ.get ('ARPA2_BINDPW')
+
+use_gssapi = ldapuser [-18:].lower () == ',cn=gssapi,cn=auth'
+
+if not use_gssapi:
+	if ldappasw is None:
+		import getpass
+		print ('LDAPuser: ', ldapuser)
+		ldappasw = getpass.getpass ('Password: ')
+		os.environ ['ARPA2_BINDPW'] = ldappasw
+
+#
+# Initialisation
+#
+
+dap = ldap.initialize (ldapuri)
+if use_gssapi:
+	sasl_auth = ldap.sasl.gssapi()
+	dap.sasl_interactive_bind_s(ldapuser, sasl_auth)
+else:
+	dap.bind_s (ldapuser, ldappasw)
+
 
 rkv = riak.RiakClient ()
 
-dap = ldap.initialize (ldapuri)
-dap.bind_s (user, pasw)
-
-base = 'ou=Reservoir,o=arpa2.org,ou=ServiceDIT'
 
 # Produce a UUID in the format we like it (lowercase string).
 #
@@ -118,7 +151,7 @@ def cmd_collection_add (domain, collname):
 		('resourceClassUUID', reservoir_uuid),
 		('resourceInstanceKey', colluuid),
 		('collection', colluuid),
-		('accessControlList', '999 V @.'),
+		('accessControlList', '0 V @.'),
 		('cn', collname),
 	]
 	print 'adding', dn1
@@ -253,11 +286,10 @@ def cmd_resource_add (domain, colluuid, mediatype, objname, blob):
 		('resource', objkey),
 		('mediaType', mediatype),
 		('cn', objname),
-		# mimetype ?
 	]
 	bkt = rkv.bucket_type (domain).bucket (colluuid)
 	obj = riak.RiakObject (rkv, bkt, objkey)
-	obj.content_type = mimetype
+	obj.content_type = mediatype
 	obj.data = blob
 	print 'Content-Type:', obj.content_type
 	print 'Data:', obj.data
@@ -377,7 +409,7 @@ def shell ():
 	exited = False
 	while not exited:
 		if sys.stdin.isatty ():
-			sys.stdout.write ('a2reservoir> ')
+			sys.stdout.write ('arpa2resv> ')
 			sys.stdout.flush ()
 		words = sys.stdin.readline ().replace ('\t',' ').replace ('  ',' ').strip ().split (' ')
 		if words in [['exit'], ['quit']]:
